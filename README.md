@@ -1,5 +1,5 @@
 ## plan istraživanja i razvoja (roadmap)
-
+"Probabilistic Assessment of Financial Default Risk via Bayesian-Optimized Gradient Boosting and Game-Theoretic Feature Attribution"
 ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimizacije i interpretacije robustnog sustava za procjenu financijskog rizika. fokus je na znanstvenoj metodologiji i inženjerskoj reproducibilnosti.
 
 ### faza 1: postavljanje, podaci i statistička analiza (tjedan 1-3)
