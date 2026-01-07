@@ -5,11 +5,11 @@ ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimi
 ### faza 1: postavljanje, podaci i statistička analiza (tjedan 1-3)
 - [x] **infrastruktura:**
     - [x] inicijalizacija gita i .gitignore (python/pycharm).
-    - [ ] postavljanje `dvc` (data version control) za praćenje verzija dataseta.
-    - [ ] konfiguracija virtualnog okruženja (`poetry` ili `venv`).
-- [ ] **akvizicija i validacija podataka:**
-    - [ ] odabir high-dimensional financijskog dataseta (npr. german credit data ili taiwan bankruptcy).
-    - [ ] provjera integriteta podataka i detekcija duplikata.
+    - [x] postavljanje `dvc` (data version control) za praćenje verzija dataseta.
+    - [] konfiguracija virtualnog okruženja (`poetry` ili `venv`).
+- [x] **akvizicija i validacija podataka:**
+    - [x] odabir high-dimensional financijskog dataseta (npr. german credit data ili taiwan bankruptcy).
+    - [x] provjera integriteta podataka i detekcija duplikata.
 - [ ] **napredna eda i statistika:**
     - [ ] vizualizacija distribucija (histogrami, boxplotovi).
     - [ ] statistički testovi normalnosti (shapiro-wilk / kolmogorov-smirnov).
