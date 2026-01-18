@@ -10,9 +10,9 @@ ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimi
 - [x] **akvizicija i validacija podataka:**
     - [x] odabir high-dimensional financijskog dataseta (npr. german credit data ili taiwan bankruptcy).
     - [x] provjera integriteta podataka i detekcija duplikata.
-- [ ] **napredna eda i statistika:**
-    - [ ] vizualizacija distribucija (histogrami, boxplotovi).
-    - [ ] statistički testovi normalnosti (shapiro-wilk / kolmogorov-smirnov).
+- [x] **napredna eda i statistika:**
+    - [x] vizualizacija distribucija (histogrami, boxplotovi).
+    - [x] statistički testovi normalnosti (shapiro-wilk / kolmogorov-smirnov).
     - [ ] analiza korelacija (pearson za linearne, spearman za nelinearne odnose).
     - [ ] detekcija multikolinearnosti (vif - variance inflation factor).
 
