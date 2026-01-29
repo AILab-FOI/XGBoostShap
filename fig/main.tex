@@ -1,0 +1,997 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[croatian]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\sisetup{detect-all}
+
+\usepackage{caption}
+\usepackage{subcaption}
+
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=black,
+  citecolor=black
+}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{220,220,220}
+\definecolor{codekw}{RGB}{0,0,120}
+\definecolor{codestr}{RGB}{120,0,0}
+\definecolor{codecom}{RGB}{60,90,60}
+
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  numbers=left,
+  numberstyle=\tiny,
+  stepnumber=1,
+  showstringspaces=false,
+  breaklines=true,
+  tabsize=2,
+  keywordstyle=\color{codekw},
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom},
+  captionpos=b
+}
+\lstdefinestyle{bash}{
+  language=bash,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  numbers=left,
+  numberstyle=\tiny,
+  stepnumber=1,
+  showstringspaces=false,
+  breaklines=true,
+  tabsize=2,
+  captionpos=b
+}
+\lstdefinestyle{sql}{
+  language=SQL,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  numbers=left,
+  numberstyle=\tiny,
+  stepnumber=1,
+  showstringspaces=false,
+  breaklines=true,
+  tabsize=2,
+  captionpos=b
+}
+
+\title{\textbf{Procjena financijskog rizika defaulta}\\
+Bayesovski optimizirani gradient boosting i objašnjivost pomoću SHAP-a\\
+\large}
+\author{Matej \v{C}i\v{c}ek}
+\date{\today}
+
+\begin{document}
+
+\pagenumbering{roman}
+\maketitle
+\thispagestyle{empty}
+
+\vspace{0.8cm}
+\begin{center}
+\begin{minipage}{0.95\textwidth}
+\textbf{Sažetak.}
+U radu je razvijen reproducibilan sustav za procjenu rizika financijskog neispunjenja obveza (default/bankruptcy) koji integrira heterogene izvore podataka (CSV i XLSX), provodi naprednu predobradu (MICE imputacija, robustan tretman outliera), trenira i optimizira modele (logistička regresija, random forest i XGBoost) te uvodi Bayesovu optimizaciju hiperparametara pomoću Optuna okvira. Sustav uključuje rigoroznu validaciju (nested cross-validation), kalibraciju vjerojatnosti (izotonička kalibracija), interpretabilnost SHAP metodom te segmentaciju uzoraka (K-means). Integrirani podaci i metrike pohranjuju se u SQLite bazu, a rezultati i predikcije izlažu se kroz REST API (FastAPI), što omogućuje jednostavnu integraciju u druge aplikacije.
+\end{minipage}
+\end{center}
+
+\vfill
+\noindent\textbf{Ključne riječi:} kreditni rizik, default, XGBoost, Optuna, SHAP, kalibracija, K-means, reproducibilnost, SQLite, FastAPI.
+
+\newpage
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\newpage
+\chapter*{Popis kratica}
+\addcontentsline{toc}{chapter}{Popis kratica}
+\begin{tabular}{ll}
+AUC & Area Under ROC Curve \\
+PR-AUC & Area Under Precision--Recall Curve \\
+CV & Cross-Validation \\
+MICE & Multiple Imputation by Chained Equations \\
+SHAP & SHapley Additive exPlanations \\
+API & Application Programming Interface \\
+DVC & Data Version Control \\
+PCA & Principal Component Analysis \\
+\end{tabular}
+
+\newpage
+\pagenumbering{arabic}
+
+\chapter{Uvod}
+\section{Motivacija}
+Procjena financijskog rizika neispunjenja obveza (defaulta) temelj je donošenja odluka u kreditiranju, upravljanju portfeljem i regulatornoj usklađenosti. Za razliku od opće klasifikacije, u kreditnom riziku često je potrebna \emph{probabilistička} predikcija: model mora dati smisleno kalibrirane vjerojatnosti jer se one koriste za pragove odobravanja, procjenu očekivanog gubitka i definiranje cijene rizika.
+
+U industrijskoj praksi ansambl metode (osobito gradijentno pojačavanje) često nadmašuju linearne modele u prediktivnoj kvaliteti. XGBoost \cite{chen2016xgboost} je široko prihvaćen standard zbog skalabilnosti i performansi, no takvi modeli su teže interpretabilni bez dodatnih metoda objašnjivosti. SHAP \cite{lundberg2017shap} omogućuje formalizirano objašnjenje doprinosâ značajki na temelju teorije igara, čime se postiže auditabilnost i razumijevanje odluka.
+
+\section{Ciljevi projekta}
+Projekt je definiran kao inženjerski i istraživački pipeline s ciljevima:
+\begin{itemize}
+  \item prikupljanje najmanje dva heterogena skupa podataka i integracija u zajednički okvir,
+  \item implementacija predobrade (imputacija, tretman outliera, kodiranje i skaliranje),
+  \item usporedba baseline modela s Bayesovski optimiziranim XGBoost modelom,
+  \item rigorozna validacija (nested CV) i optimizacija praga odluke,
+  \item kalibracija vjerojatnosti i procjena kvalitete probabilističkih predikcija,
+  \item interpretabilnost (globalna i lokalna) pomoću SHAP-a,
+  \item segmentacija uzoraka (K-means) i analiza klastera,
+  \item pohrana integriranog skupa, metrika i artefakata u bazu te izrada API sučelja.
+\end{itemize}
+
+\section{Korišteni skupovi podataka i heterogenost}
+Korištena su najmanje dva izvora podataka:
+\begin{itemize}
+  \item \textbf{Skup A (CSV)}: \emph{Company Bankruptcy Prediction} \cite{kaggleA} s ciljem \texttt{Bankrupt?}.
+  \item \textbf{Skup B (XLSX)}: \emph{Credit Risk Modelling Dataset} \cite{kaggleB} s binarnom ciljanom varijablom (npr. \texttt{default}).
+\end{itemize}
+Skupovi su heterogeni po formatu (CSV i Excel), strukturi i semantici značajki.
+
+\section{Organizacija dokumenta}
+U nastavku se daje teorijska podloga, opis implementacije, prikaz rada aplikacije, kritički osvrt i zaključak, uz literaturu u IEEE stilu. Svaki relevantan isječak koda opisan je u tekstu prije ili poslije listinga.
+
+\chapter{Glavni dio teme: formalizam, definicije i teorija}
+\section{Binarna klasifikacija i probabilističko predviđanje}
+Neka su $\mathbf{x}\in\mathbb{R}^d$ značajke, a $y\in\{0,1\}$ ciljana oznaka gdje $y=1$ označava default/bankrot. Model procjenjuje vjerojatnost
+\begin{equation}
+p(y=1\mid\mathbf{x}) \in [0,1].
+\end{equation}
+U kreditnom riziku takva vjerojatnost se često mapira u odluku preko praga $\tau$:
+\begin{equation}
+\hat{y}=\mathbb{I}[p(y=1\mid\mathbf{x}) \ge \tau].
+\end{equation}
+
+\section{Metrike evaluacije}
+Za neravnotežne probleme AUC i PR-AUC pružaju dopunske informacije.
+ROC-AUC mjeri rangiranje bez obzira na prag, dok PR-AUC bolje reflektira kvalitetu predikcije pozitivne klase. Za izabrani prag koristi se F1 mjera:
+\begin{equation}
+F1 = \frac{2\cdot \text{precision}\cdot \text{recall}}{\text{precision}+\text{recall}}.
+\end{equation}
+Za probabilističku kvalitetu koristi se Brier score \cite{niculescu2005predicting}:
+\begin{equation}
+\text{Brier} = \frac{1}{n}\sum_{i=1}^{n}(p_i-y_i)^2.
+\end{equation}
+
+\section{Logistička regresija}
+Logistička regresija modelira:
+\begin{equation}
+p(y=1\mid\mathbf{x}) = \sigma(\mathbf{w}^\top \mathbf{x}+b),
+\end{equation}
+gdje je $\sigma$ logistička funkcija. Prednost je interpretabilnost i stabilnost, no ograničenje je slabija sposobnost modeliranja nelinearnih odnosa.
+
+\section{Random Forest}
+Random Forest (RF) trenira ansambl stabala na bootstrap uzorcima, uz slučajni odabir značajki po splitu. RF je robustan i često dobar baseline, no može imati slabiju kalibraciju i slabije performanse u odnosu na specijalizirane metode gradijentnog pojačavanja.
+
+\section{XGBoost i gradijentno pojačavanje}
+XGBoost \cite{chen2016xgboost} je učinkovita implementacija gradijentnog pojačavanja stabala odluke s regularizacijom. U neravnotežnim problemima tipično se koristi \texttt{scale\_pos\_weight} kako bi se penalizirale pogreške na manjinskoj klasi.
+
+\section{Bayesova optimizacija hiperparametara (Optuna)}
+Umjesto grid/random pretrage koristi se Bayesova optimizacija hiperparametara s Optuna okvirom \cite{akiba2019optuna}. Optuna iterativno predlaže hiperparametre (trialove) prema prethodnim rezultatima i maksimalizira odabranu metriku (u ovom projektu PR-AUC).
+
+\section{Nested cross-validation}
+Nested CV razdvaja optimizaciju hiperparametara (inner loop) od procjene generalizacije (outer loop). Time se smanjuje optimistična pristranost pri procjeni performansi modela, posebno kada je prostor hiperparametara velik.
+
+\section{Imputacija: MICE}
+Za numeričke značajke koristi se IterativeImputer koji implementira MICE pristup \cite{vanbuuren2011mice}. Umjesto imputacije prosjekom/medijanom, MICE iterativno modelira svaku varijablu na temelju ostalih, često dajući realističnije imputacije.
+
+\section{Detekcija anomalija: Isolation Forest}
+Isolation Forest \cite{liu2008isolation} izolira anomalije kroz slučajne particije prostora podataka. U projektu se koristi za izgradnju dodatne binarne značajke \texttt{outlier\_flag} koja signalizira potencijalno atipične uzorke.
+
+\section{Kalibracija vjerojatnosti}
+Ansambl modeli mogu davati nekalibrirane vjerojatnosti. Izotonička kalibracija uči monotonu transformaciju koja usklađuje predikcije s empirijskim učestalostima \cite{niculescu2005predicting}. Usporedba Brier score-a prije i poslije kalibracije daje jasan signal korisnosti.
+
+\section{Interpretabilnost: SHAP}
+SHAP \cite{lundberg2017shap} daje aditivna objašnjenja predikcija i povezuje doprinos značajki s formalizmom Shapleyjevih vrijednosti. Time se dobiva i globalna važnost značajki (summary plot) i lokalno objašnjenje za pojedini uzorak (waterfall).
+
+\section{Segmentacija: K-means}
+K-means \cite{macqueen1967kmeans} particionira uzorke u $k$ klastera minimiziranjem unutar-klasterske varijance. Silhouette score se koristi za izbor $k$, a PCA projekcija omogućuje vizualnu provjeru separacije.
+
+\chapter{Opis implementacije (komponente sustava)}
+\section{Arhitektura rješenja}
+Sustav se sastoji od sljedećih komponenti:
+\begin{enumerate}
+  \item Akvizicija podataka (Kaggle CLI) i validacija integriteta.
+  \item Predobrada i integracija heterogenih skupova u zajednički prostor značajki.
+  \item Modeliranje: baseline modeli i optimizirani XGBoost.
+  \item Validacija: standardna CV i nested CV.
+  \item Post-proces: threshold tuning, kalibracija, SHAP objašnjenja, K-means segmentacija.
+  \item Pohrana: SQLite baza za integrirane podatke i metrike.
+  \item Sučelje: REST API (FastAPI) za dohvat metrika i predikcije.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+
+\caption{Arhitektura sustava (predložak; korisnik umeće vlastitu sliku).}
+\label{fig:arch}
+\end{figure}
+
+\section{Struktura repozitorija}
+Sljedeći isječak prikazuje preporučenu strukturu projekta. Odvajanje podataka, artefakata i izvornog koda olakšava održavanje i reproducibilnost.
+
+\begin{lstlisting}[style=bash,caption={Primjer strukture projekta}]
+default-risk-project/
+  data/
+    raw/
+    interim/
+    processed/
+  artifacts/
+    fig/
+    models/
+  src/
+    api.py
+    features.py
+    train.py
+  default_risk.db
+  dvc.yaml
+  .gitignore
+  README.md
+\end{lstlisting}
+
+\section{Reproducibilnost: Git i DVC}
+Ovaj isječak demonstrira inicijalizaciju Git i DVC-a \cite{dvc}. DVC prati velike datoteke i omogućuje vraćanje točne verzije skupa podataka korištene u eksperimentu.
+
+\begin{lstlisting}[style=bash,caption={Inicijalizacija Git i DVC}]
+git init
+dvc init
+dvc add data/raw/
+git add .
+git commit -m "Init: repo + DVC + raw data tracking"
+\end{lstlisting}
+
+\section{Akvizicija podataka (Kaggle)}
+U nastavku je kod koji provjerava dostupnost Kaggle tokena i preuzima dva skupa. Ovaj korak zadovoljava zahtjev projekta za dokumentiranje načina prikupljanja i citiranje izvora \cite{kaggleA,kaggleB}.
+
+\begin{lstlisting}[style=py,caption={Preuzimanje heterogenih skupova (CSV i XLSX) s Kaggle-a}]
+from pathlib import Path
+import os
+import subprocess
+
+def run(cmd):
+    r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
+
+def kaggle_ready():
+    p = Path.home() / ".kaggle" / "kaggle.json"
+    if p.exists():
+        return True
+    if os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
+        return True
+    return False
+
+def kaggle_download(dataset_slug, out_dir):
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = f'kaggle datasets download -d "{dataset_slug}" -p "{out_dir.as_posix()}" --unzip -q'
+    return run(cmd)
+
+slug_a = "fedesoriano/company-bankruptcy-prediction"
+slug_b = "abhirajmandal/credit-risk-modelling-dataset"
+
+if kaggle_ready():
+    kaggle_download(slug_a, "data/raw/bankruptcy_csv")
+    kaggle_download(slug_b, "data/raw/credit_xlsx")
+\end{lstlisting}
+
+\section{Učitavanje i validacija integriteta}
+Nakon preuzimanja, slijedi učitavanje i osnovna validacija (dimenzije, duplikati, udio nedostajućih). Ovaj korak služi kao kontrolna točka prije ulaska u predobradu.
+
+\begin{lstlisting}[style=py,caption={Učitavanje i osnovna provjera integriteta}]
+import pandas as pd
+import numpy as np
+
+df_a_raw = pd.read_csv("data/raw/bankruptcy_csv/CompanyBankruptcy.csv")
+df_b_raw = pd.read_excel("data/raw/credit_xlsx/case_study1.xlsx")
+
+def basic_validation(df):
+    return {
+        "redaka": int(df.shape[0]),
+        "stupaca": int(df.shape[1]),
+        "duplikata": int(df.duplicated().sum()),
+        "udio_nedostajucih": float(df.isna().mean().mean())
+    }
+
+va = basic_validation(df_a_raw)
+vb = basic_validation(df_b_raw)
+va, vb
+\end{lstlisting}
+
+\section{EDA i statistička analiza}
+Ovaj dio pokazuje primjer EDA postupaka: histogrami numeričkih varijabli i prikaz korelacija. Takvi grafovi pomažu identificirati ekstremne distribucije, potencijalne transformacije i multikolinearnost.
+
+\begin{lstlisting}[style=py,caption={Distribucije i korelacije (primjer)}]
+import matplotlib.pyplot as plt
+import numpy as np
+
+num_cols_a = df_a_raw.select_dtypes(include=[np.number]).columns.tolist()
+df_a_raw[num_cols_a].iloc[:, :12].hist(bins=30, figsize=(12,6))
+plt.tight_layout()
+plt.show()
+
+corr = df_a_raw[num_cols_a].corr(method="pearson")
+plt.figure(figsize=(9,6))
+plt.imshow(corr.values, aspect="auto")
+plt.colorbar()
+plt.title("Pearson korelacije (Skup A)")
+plt.tight_layout()
+plt.show()
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{fig/eda_hist_a.png}
+\caption{Histogrami numeričkih varijabli (Skup A).}
+\label{fig:eda_hist_a}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.90\textwidth]{fig/eda_corr_a.png}
+\caption{Matrica korelacija (Skup A).}
+\label{fig:eda_corr_a}
+\end{figure}
+
+\section{Tretman outliera i anomalija}
+Sljedeći isječak implementira IQR winsorization (klipanje ekstremnih vrijednosti) i izgradnju \texttt{outlier\_flag} značajke Isolation Forest metodom \cite{liu2008isolation}. Ovakav signal može pomoći modelu u prepoznavanju atipičnih obrazaca.
+
+\begin{lstlisting}[style=py,caption={IQR winsorization + Isolation Forest outlier flag}]
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def iqr_clip_fit(X, num_cols, k=1.5):
+    q1 = X[num_cols].quantile(0.25)
+    q3 = X[num_cols].quantile(0.75)
+    iqr = q3 - q1
+    lo = q1 - k * iqr
+    hi = q3 + k * iqr
+    return lo, hi
+
+def iqr_clip_transform(X, num_cols, lo, hi):
+    X2 = X.copy()
+    X2[num_cols] = X2[num_cols].clip(lo, hi, axis=1)
+    return X2
+
+def add_isoforest_flag(X, num_cols):
+    Xn = X[num_cols].replace([np.inf, -np.inf], np.nan)
+    Xn = Xn.fillna(Xn.median())
+    iso = IsolationForest(n_estimators=200, contamination="auto", random_state=42)
+    return (iso.fit_predict(Xn.values) == -1).astype(int)
+\end{lstlisting}
+
+\section{Predobrada: MICE imputacija, skaliranje i kodiranje}
+Ovaj preprocesor provodi MICE imputaciju \cite{vanbuuren2011mice} na numeričkim varijablama, standardizaciju, a za kategorijske varijable (ako postoje) imputaciju najčešćom vrijednošću i one-hot kodiranje. Implementacija je robusna na slučaj kada u skupu nema kategorijskih varijabli.
+
+\begin{lstlisting}[style=py,caption={Robustan ColumnTransformer preprocesor i dohvat naziva značajki}]
+import numpy as np
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+
+def make_preprocessor(num_cols, cat_cols, seed=42):
+    num_pipe = Pipeline([
+        ("imp", IterativeImputer(random_state=seed, max_iter=20, sample_posterior=False)),
+        ("sc", StandardScaler())
+    ])
+    if len(cat_cols) == 0:
+        return ColumnTransformer([("num", num_pipe, num_cols)])
+    cat_pipe = Pipeline([
+        ("imp", SimpleImputer(strategy="most_frequent")),
+        ("oh", OneHotEncoder(handle_unknown="ignore"))
+    ])
+    return ColumnTransformer([
+        ("num", num_pipe, num_cols),
+        ("cat", cat_pipe, cat_cols)
+    ])
+
+def to_feature_names(prep):
+    num_cols = list(prep.transformers_[0][2])
+    cat_cols = list(prep.transformers_[1][2]) if len(prep.transformers_) > 1 else []
+    if len(cat_cols) == 0:
+        return num_cols
+    cat_pipe = prep.transformers_[1][1]
+    oh = cat_pipe.named_steps["oh"]
+    return num_cols + oh.get_feature_names_out(cat_cols).tolist()
+\end{lstlisting}
+
+\section{Integracija heterogenih skupova}
+Integracija se izvodi tako da se oba skupa zasebno preprocesiraju, a zatim se njihove matrice značajki spajaju u zajednički prostor značajki pomoću \emph{outer} konkatenacije uz popunjavanje nedostajućih značajki nulama. Dodatno se čuva informacija o izvoru uzorka kroz \texttt{dataset} atribut.
+
+\begin{lstlisting}[style=py,caption={Integracija A i B skupa u zajednički prostor značajki}]
+import pandas as pd
+import numpy as np
+
+def split_types(df):
+    num = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat = [c for c in df.columns if c not in num]
+    return num, cat
+
+Xa = df_a_raw.drop(columns=["Bankrupt?"])
+ya = df_a_raw["Bankrupt?"].astype(int)
+
+Xb = df_b_raw.drop(columns=["default"])
+yb = df_b_raw["default"].astype(int)
+
+num_a, cat_a = split_types(Xa)
+num_b, cat_b = split_types(Xb)
+
+prep_a = make_preprocessor(num_a, cat_a, seed=42)
+prep_b = make_preprocessor(num_b, cat_b, seed=42)
+
+Za = prep_a.fit_transform(Xa)
+Zb = prep_b.fit_transform(Xb)
+
+fa = to_feature_names(prep_a)
+fb = to_feature_names(prep_b)
+
+Xa_enc = pd.DataFrame(Za.toarray() if hasattr(Za,"toarray") else Za, columns=fa)
+Xb_enc = pd.DataFrame(Zb.toarray() if hasattr(Zb,"toarray") else Zb, columns=fb)
+
+Xa_enc["dataset"] = "A"
+Xb_enc["dataset"] = "B"
+
+X_all = pd.concat([Xa_enc, Xb_enc], axis=0, join="outer", ignore_index=True).fillna(0.0)
+y_all = pd.concat([ya.reset_index(drop=True), yb.reset_index(drop=True)], ignore_index=True)
+X_all.shape, y_all.mean()
+\end{lstlisting}
+
+\section{Selekcija značajki i baseline modeli}
+Zbog potencijalno visoke dimenzionalnosti uvodi se selekcija značajki. RFE postupno uklanja najmanje važne značajke prema logističkoj regresiji te ostavlja podskup za treniranje modela. Nakon toga se treniraju baseline modeli (LR i RF) radi usporedbe.
+
+\begin{lstlisting}[style=py,caption={RFE selekcija + baseline modeli (LR i RF)}]
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score, average_precision_score
+
+X = X_all.drop(columns=["dataset"]).astype(float).values
+y = y_all.values
+
+lr_base = LogisticRegression(max_iter=1000, solver="liblinear", class_weight="balanced", random_state=42)
+rfe = RFE(estimator=lr_base, n_features_to_select=min(60, X.shape[1]//2), step=0.1)
+rfe.fit(X, y)
+
+mask = rfe.support_
+X_sel = X[:, mask]
+
+lr = LogisticRegression(max_iter=1000, solver="liblinear", class_weight="balanced", random_state=42)
+rf = RandomForestClassifier(n_estimators=600, class_weight="balanced_subsample", random_state=42)
+
+lr.fit(X_sel, y)
+p_lr = lr.predict_proba(X_sel)[:,1]
+
+rf.fit(X_sel, y)
+p_rf = rf.predict_proba(X_sel)[:,1]
+
+roc_auc_score(y, p_lr), average_precision_score(y, p_lr), roc_auc_score(y, p_rf)
+\end{lstlisting}
+
+\section{Optuna + XGBoost optimizacija}
+Sljedeći isječak definira \texttt{objective} funkciju za Optuna: za svaki trial predlaže hiperparametre XGBoost modela, evaluira ih stratificiranom CV-om i vraća prosječni PR-AUC.
+
+\begin{lstlisting}[style=py,caption={Optuna objective funkcija za XGBoost (cilj: PR-AUC)}]
+import optuna
+from xgboost import XGBClassifier
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import average_precision_score
+import numpy as np
+
+def objective(trial, X, y, seed=42, n_splits=5):
+    params = {
+        "n_estimators": trial.suggest_int("n_estimators", 200, 1200),
+        "max_depth": trial.suggest_int("max_depth", 2, 8),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.25, log=True),
+        "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+        "min_child_weight": trial.suggest_float("min_child_weight", 1e-2, 20.0, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 50.0, log=True),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
+        "gamma": trial.suggest_float("gamma", 0.0, 5.0),
+        "objective": "binary:logistic",
+        "eval_metric": "aucpr",
+        "random_state": seed,
+        "n_jobs": -1
+    }
+    posw = float((y==0).sum() / max(1, (y==1).sum()))
+    params["scale_pos_weight"] = posw
+
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    scores = []
+    for tr_idx, va_idx in cv.split(X, y):
+        m = XGBClassifier(**params)
+        m.fit(X[tr_idx], y[tr_idx])
+        p = m.predict_proba(X[va_idx])[:,1]
+        scores.append(average_precision_score(y[va_idx], p))
+    return float(np.mean(scores))
+
+study = optuna.create_study(direction="maximize")
+study.optimize(lambda t: objective(t, X_sel, y, seed=42, n_splits=5), n_trials=40, show_progress_bar=False)
+
+study.best_value, study.best_params
+\end{lstlisting}
+
+\section{Rigorozna validacija: nested CV}
+Nested CV implementacija osigurava da se hiperparametri odabiru isključivo unutar train dijela vanjskog folda, a evaluacija se radi na neviđenim vanjskim test foldovima.
+
+\begin{lstlisting}[style=py,caption={Nested CV (outer + inner Optuna)}]
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_auc_score, average_precision_score
+from xgboost import XGBClassifier
+import numpy as np
+import optuna
+
+outer = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+outer_rows = []
+
+for fold, (tr_idx, te_idx) in enumerate(outer.split(X_sel, y), start=1):
+    Xo_tr, Xo_te = X_sel[tr_idx], X_sel[te_idx]
+    yo_tr, yo_te = y[tr_idx], y[te_idx]
+
+    st = optuna.create_study(direction="maximize")
+    st.optimize(lambda t: objective(t, Xo_tr, yo_tr, seed=42, n_splits=3), n_trials=15, show_progress_bar=False)
+
+    bp = dict(st.best_params)
+    bp.update({
+        "objective": "binary:logistic",
+        "eval_metric": "aucpr",
+        "random_state": 42,
+        "n_jobs": -1,
+        "scale_pos_weight": float((yo_tr==0).sum() / max(1,(yo_tr==1).sum()))
+    })
+
+    m = XGBClassifier(**bp)
+    m.fit(Xo_tr, yo_tr)
+    p = m.predict_proba(Xo_te)[:,1]
+
+    outer_rows.append({
+        "fold": fold,
+        "AUC": float(roc_auc_score(yo_te, p)),
+        "PR_AUC": float(average_precision_score(yo_te, p))
+    })
+
+outer_rows, float(np.mean([r["AUC"] for r in outer_rows])), float(np.mean([r["PR_AUC"] for r in outer_rows]))
+\end{lstlisting}
+
+\section{Odabir praga odluke}
+Ovaj dio pokazuje kako se prag $\tau$ može optimizirati za F1 ili prema jednostavnoj profit funkciji (cost-sensitive pristup). U stvarnoj primjeni težine se određuju prema poslovnim troškovima FP i FN.
+
+\begin{lstlisting}[style=py,caption={Threshold tuning: F1 i profit funkcija}]
+import numpy as np
+from sklearn.metrics import precision_recall_curve, f1_score
+
+p = m.predict_proba(X_sel)[:,1]
+pr, rc, th = precision_recall_curve(y, p)
+
+f1s = 2*pr*rc/(pr+rc+1e-12)
+best_i = int(np.nanargmax(f1s[:-1])) if len(th) else 0
+thr_f1 = float(th[best_i]) if len(th) else 0.5
+yhat = (p >= thr_f1).astype(int)
+
+thr_f1, f1_score(y, yhat)
+
+C_TP, C_FP, C_FN, C_TN = 1.0, -0.2, -1.0, 0.0
+def profit(y_true, y_pred):
+    y_true = np.asarray(y_true); y_pred = np.asarray(y_pred)
+    tp = ((y_true==1)&(y_pred==1)).sum()
+    fp = ((y_true==0)&(y_pred==1)).sum()
+    fn = ((y_true==1)&(y_pred==0)).sum()
+    tn = ((y_true==0)&(y_pred==0)).sum()
+    return C_TP*tp + C_FP*fp + C_FN*fn + C_TN*tn
+
+profits = [(t, profit(y, (p>=t).astype(int))) for t in np.linspace(0.01,0.99,99)]
+best_t_profit = max(profits, key=lambda x: x[1])[0]
+best_t_profit
+\end{lstlisting}
+
+\section{Kalibracija vjerojatnosti}
+Sljedeći isječak provodi izotoničku kalibraciju i uspoređuje Brier score prije i poslije. U dokumentaciji se preporučuje uključiti i kalibracijske krivulje.
+
+\begin{lstlisting}[style=py,caption={Izotonička kalibracija i Brier score}]
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import brier_score_loss
+
+cal = CalibratedClassifierCV(m, method="isotonic", cv=3)
+cal.fit(X_sel, y)
+
+p_uncal = m.predict_proba(X_sel)[:,1]
+p_cal = cal.predict_proba(X_sel)[:,1]
+
+brier_score_loss(y, p_uncal), brier_score_loss(y, p_cal)
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig/calibration_uncalibrated.png}
+\caption{Kalibracijska krivulja prije kalibracije (predložak).}
+\label{fig:cal_uncal}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig/calibration_isotonic.png}
+\caption{Kalibracijska krivulja nakon izotoničke kalibracije (predložak).}
+\label{fig:cal_iso}
+\end{figure}
+
+\section{SHAP interpretabilnost}
+Ovaj dio računa SHAP vrijednosti i sprema grafove. Preporuka je koristiti uzorak podataka radi vremenske učinkovitosti, te navesti barem jedan globalni i jedan lokalni graf.
+
+\begin{lstlisting}[style=py,caption={SHAP TreeExplainer: globalno i lokalno objašnjenje}]
+import shap
+import matplotlib.pyplot as plt
+
+expl = shap.TreeExplainer(m)
+X_sample = X_sel[:2000]
+sv = expl.shap_values(X_sample)
+
+shap.summary_plot(sv, X_sample, show=False)
+plt.savefig("artifacts/fig/shap_summary.png", dpi=200, bbox_inches="tight")
+plt.close()
+
+idx = 0
+shap.plots._waterfall.waterfall_legacy(expl.expected_value, sv[idx], features=X_sample[idx], show=False)
+plt.savefig("artifacts/fig/shap_waterfall.png", dpi=200, bbox_inches="tight")
+plt.close()
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{fig/shap_summary.png}
+\caption{SHAP summary plot: globalna važnost značajki (predložak).}
+\label{fig:shap_summary}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{fig/shap_waterfall.png}
+\caption{SHAP waterfall: lokalno objašnjenje za jedan uzorak (predložak).}
+\label{fig:shap_waterfall}
+\end{figure}
+
+\section{K-means segmentacija}
+U nastavku se bira broj klastera prema silhouette score-u i vizualizira segmentacija u PCA prostoru. Nakon toga se tipično izvodi analiza klastera: stopa defaulta po klasteru i prosjeci ključnih značajki.
+
+\begin{lstlisting}[style=py,caption={K-means: izbor k, učenje i PCA vizualizacija}]
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.decomposition import PCA
+import numpy as np
+import matplotlib.pyplot as plt
+
+k_vals = range(2, 9)
+sil = []
+for k in k_vals:
+    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    lab = km.fit_predict(X_sel)
+    sil.append(silhouette_score(X_sel, lab))
+
+k_best = int(list(k_vals)[int(np.argmax(sil))])
+
+km = KMeans(n_clusters=k_best, random_state=42, n_init=10)
+lab = km.fit_predict(X_sel)
+
+pca = PCA(n_components=2, random_state=42)
+Z = pca.fit_transform(X_sel)
+
+plt.figure()
+plt.scatter(Z[:,0], Z[:,1], c=lab)
+plt.savefig("artifacts/fig/kmeans_pca.png", dpi=200, bbox_inches="tight")
+plt.close()
+
+k_best, float(np.max(sil))
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+
+\label{fig:silhouette}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig/kmeans_pca.png}
+\caption{K-means klasteri u PCA projekciji (predložak).}
+\label{fig:kmeans_pca}
+\end{figure}
+
+\section{Pohrana integriranih podataka i metrika u SQLite}
+Pohrana u SQLite omogućuje ponovnu uporabu rezultata bez retreniranja te jednostavan dohvat kroz API sloj. Sljedeći isječak sprema odabrane značajke i ciljne oznake, te primjer tablice metrika.
+
+\begin{lstlisting}[style=py,caption={SQLite: spremanje procesiranih podataka i metrika}]
+import sqlite3
+import pandas as pd
+
+DB = "default_risk.db"
+con = sqlite3.connect(DB)
+
+pd.DataFrame(X_sel).assign(y=y).to_sql("dataset_selected", con, index=False, if_exists="replace")
+
+metrics = pd.DataFrame([
+    {"model":"LR", "AUC": None, "PR_AUC": None, "F1": None, "thr": None},
+    {"model":"RF", "AUC": None, "PR_AUC": None, "F1": None, "thr": None},
+    {"model":"XGB", "AUC": None, "PR_AUC": None, "F1": None, "thr": None}
+])
+metrics.to_sql("metrics", con, index=False, if_exists="replace")
+
+con.close()
+\end{lstlisting}
+
+\subsection{Shema baze}
+Sljedeći SQL primjer opisuje minimalnu shemu tablica. U praksi se tablice generiraju iz pandas DataFrame objekata, ali eksplicitna shema je korisna za dokumentaciju.
+
+\begin{lstlisting}[style=sql,caption={Primjer sheme (konceptualno)}]
+CREATE TABLE dataset_selected (
+  f0 REAL, f1 REAL, ...,
+  y INTEGER
+);
+
+CREATE TABLE metrics (
+  model TEXT,
+  AUC REAL,
+  PR_AUC REAL,
+  F1 REAL,
+  thr REAL
+);
+\end{lstlisting}
+
+\section{REST API sučelje (FastAPI)}
+API sloj omogućuje standardiziran pristup metrikama i predikcijama. U nastavku je minimalna implementacija: \texttt{/health} za provjeru stanja, \texttt{/metrics} za dohvat metrika i \texttt{/predict} za predikciju vjerojatnosti defaulta.
+
+\begin{lstlisting}[style=py,caption={FastAPI: endpointi health, metrics i predict}]
+from fastapi import FastAPI
+from pydantic import BaseModel
+import numpy as np
+import sqlite3
+import pandas as pd
+
+app = FastAPI()
+
+class PredictIn(BaseModel):
+    features: dict
+
+def read_sql(table, db_path="default_risk.db"):
+    con = sqlite3.connect(db_path)
+    try:
+        return pd.read_sql_query(f"SELECT * FROM {table}", con)
+    finally:
+        con.close()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/metrics")
+def metrics():
+    df = read_sql("metrics")
+    return df.to_dict(orient="records")
+
+@app.post("/predict")
+def predict(inp: PredictIn):
+    x = np.zeros(X_sel.shape[1], dtype=float)
+    for k, v in inp.features.items():
+        idx = int(k)
+        x[idx] = float(v)
+    p = float(cal.predict_proba(x.reshape(1,-1))[:,1][0])
+    return {"p_default": p}
+\end{lstlisting}
+
+\section{Pokretanje servisa}
+Ovaj isječak prikazuje tipični način pokretanja FastAPI aplikacije pomoću Uvicorn poslužitelja.
+
+\begin{lstlisting}[style=bash,caption={Pokretanje FastAPI aplikacije}]
+uvicorn src.api:app --host 127.0.0.1 --port 8000 --reload
+\end{lstlisting}
+
+\chapter{Prikaz rada aplikacije}
+\section{Pipeline: od podataka do modela}
+Prikaz rada aplikacije organiziran je kroz korake:
+\begin{enumerate}
+  \item preuzimanje podataka i validacija,
+  \item EDA i statistička analiza,
+  \item predobrada i integracija,
+  \item treniranje baseline modela,
+  \item Optuna optimizacija XGBoost-a,
+  \item nested CV evaluacija,
+  \item threshold tuning i kalibracija,
+  \item SHAP i K-means analize,
+  \item pohrana u SQLite,
+  \item izlaganje kroz API i testiranje endpointa.
+\end{enumerate}
+
+\section{Testiranje API-ja}
+Sljedeći primjeri pokazuju provjeru stanja servisa i dohvat metrika.
+
+\begin{lstlisting}[style=bash,caption={Testiranje /health i /metrics endpointa}]
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/metrics
+\end{lstlisting}
+
+\section{Primjer predikcije}
+U praksi se šalje JSON koji sadrži vrijednosti značajki. Ovaj primjer pretpostavlja da se u \texttt{features} šalju indeksi značajki (jednostavniji oblik), dok je produkcijski pristup tipično mapiranje po nazivima.
+
+\begin{lstlisting}[style=bash,caption={Primjer poziva /predict endpointa}]
+curl -X POST "http://127.0.0.1:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d "{\"features\": {\"0\": 0.12, \"1\": -1.03, \"2\": 0.44}}"
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+
+\caption{Primjer prikaza rada API-ja (predložak; korisnik umeće sliku).}
+\label{fig:api_demo}
+\end{figure}
+
+\chapter{Rezultati i vizualizacije}
+\section{Tablice metrika}
+U tablicu se unose rezultati iz izvršenog notebooka. Ako se metrike razlikuju od navedenih, potrebno je ažurirati vrijednosti u tablici.
+
+\begin{table}[H]
+\centering
+\caption{Usporedba modela (primjer popunjavanja).}
+\label{tab:metrics}
+\begin{tabular}{lSSSS}
+\toprule
+Model & {AUC} & {PR-AUC} & {F1} & {Prag} \\
+\midrule
+Logistička regresija & 0.7909 & 0.2164 & 0.2566 & 0.7294 \\
+Random Forest & 0.6256 & 0.1189 & 0.2564 & 0.1417 \\
+XGBoost (Optuna) & 0.7921 & 0.2464 & 0.2673 & 0.7202 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Nested CV rezultati}
+\begin{table}[H]
+\centering
+\caption{Nested CV rezultati (primjer).}
+\label{tab:nested}
+\begin{tabular}{cSS}
+\toprule
+Fold & {AUC} & {PR-AUC} \\
+\midrule
+1 & 0.8171 & 0.2520 \\
+2 & 0.8097 & 0.2014 \\
+3 & 0.7742 & 0.1702 \\
+4 & 0.8159 & 0.2890 \\
+5 & 0.8059 & 0.2671 \\
+\midrule
+Prosjek & 0.8046 & 0.2359 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Ključni grafovi}
+U nastavku su predlošci za umetanje grafova iz notebooka. Korisnik treba spremiti slike u mapu \texttt{fig/}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig/roc_xgb.png}
+\caption{ROC krivulja za XGBoost model (predložak).}
+\label{fig:roc_xgb}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig/pr_xgb.png}
+\caption{Precision--Recall krivulja za XGBoost model (predložak).}
+\label{fig:pr_xgb}
+\end{figure}
+
+\chapter{Kritički osvrt}
+\section{Praktična izvedivost}
+Sustav je praktično izvediv jer je implementiran modularno i oslanja se na standardne Python biblioteke (scikit-learn, xgboost, optuna, shap, fastapi). Pohrana u SQLite smanjuje kompleksnost infrastrukture, a REST API omogućuje integraciju u druge sustave.
+
+\section{Primjena i ograničenja}
+Prednosti:
+\begin{itemize}
+  \item XGBoost uz Bayesovu optimizaciju često daje dobar kompromis između performansi i stabilnosti \cite{chen2016xgboost,akiba2019optuna}.
+  \item Kalibracija poboljšava uporabljivost vjerojatnosti za poslovna pravila \cite{niculescu2005predicting}.
+  \item SHAP omogućuje auditabilnost i objašnjenja prema regulatornim i poslovnim potrebama \cite{lundberg2017shap}.
+  \item Segmentacija K-means može otkriti profile rizika i podržati strategije upravljanja portfeljem \cite{macqueen1967kmeans}.
+\end{itemize}
+
+Ograničenja:
+\begin{itemize}
+  \item Integracija heterogenih skupova kroz union prostora značajki može rezultirati sparsnom i visokodimenzionalnom matricom, što povećava potrebu za selekcijom i regularizacijom.
+  \item Nested CV i Optuna povećavaju računalni trošak te zahtijevaju balans između rigoroznosti i vremena.
+  \item K-means pretpostavlja sferne klastere i osjetljiv je na skaliranje; interpretacija klastera zahtijeva dodatnu analizu.
+  \item SHAP može biti računalno zahtjevan na velikim uzorcima pa se preporučuje uzorkovanje.
+\end{itemize}
+
+\section{Moguća poboljšanja}
+\begin{itemize}
+  \item Uvođenje monitoringa (data drift, concept drift) i periodičnog retreniranja.
+  \item Uvođenje cost-sensitive optimizacije praga prema realnim troškovima i prihodima.
+  \item Povećanje transparentnosti kroz modelne kartice i automatsku generaciju izvještaja.
+  \item Razmatranje alternative segmentacije (Gaussian Mixture Models, HDBSCAN) i usporedba.
+\end{itemize}
+
+\chapter{Zaključak}
+Projekt je implementirao cjeloviti pipeline za procjenu default rizika: heterogena akvizicija podataka, predobrada i integracija, baseline usporedba, Bayesovski optimiziran XGBoost, nested CV validacija, prag odluke, kalibracija, interpretabilnost SHAP metodom, segmentacija K-means metodom, pohrana u SQLite i izlaganje rezultata putem REST API-ja. Rezultati pokazuju da kombinacija snažnog modela i metoda objašnjivosti omogućuje praktično primjenjiv, auditabilan i reproducibilan sustav.
+
+
+\begin{thebibliography}{99}
+
+\bibitem{kaggleA}
+Kaggle, ``Company Bankruptcy Prediction,'' dataset, pristupljeno: \today.
+
+\bibitem{kaggleB}
+Kaggle, ``Credit Risk Modelling Dataset,'' dataset, pristupljeno: \today.
+
+\bibitem{chen2016xgboost}
+T. Chen and C. Guestrin, ``XGBoost: A Scalable Tree Boosting System,'' in \emph{Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD)}, 2016, pp. 785--794.
+
+\bibitem{akiba2019optuna}
+T. Akiba, S. Sano, T. Yanase, T. Ohta, and M. Koyama, ``Optuna: A Next-generation Hyperparameter Optimization Framework,'' in \emph{Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 2019.
+
+\bibitem{lundberg2017shap}
+S. M. Lundberg and S.-I. Lee, ``A Unified Approach to Interpreting Model Predictions,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2017.
+
+\bibitem{niculescu2005predicting}
+A. Niculescu-Mizil and R. Caruana, ``Predicting Good Probabilities with Supervised Learning,'' in \emph{Proceedings of the 22nd International Conference on Machine Learning (ICML)}, 2005, pp. 625--632.
+
+\bibitem{vanbuuren2011mice}
+S. van Buuren and K. Groothuis-Oudshoorn, ``mice: Multivariate Imputation by Chained Equations in R,'' \emph{Journal of Statistical Software}, vol. 45, no. 3, pp. 1--67, 2011.
+
+\bibitem{liu2008isolation}
+F. T. Liu, K. M. Ting, and Z.-H. Zhou, ``Isolation Forest,'' in \emph{2008 Eighth IEEE International Conference on Data Mining}, 2008, pp. 413--422.
+
+\bibitem{macqueen1967kmeans}
+J. MacQueen, ``Some Methods for Classification and Analysis of Multivariate Observations,'' in \emph{Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability}, 1967, pp. 281--297.
+
+\bibitem{dvc}
+DVC, ``Data Version Control (DVC) Documentation,'' službena dokumentacija, pristupljeno: \today.
+
+\end{thebibliography}
+
+\appendix
+\chapter{Dodatci}
+\section{Popis slika koje je potrebno umetnuti}
+U nastavku je popis predloženih slika koje ovaj dokument referencira. Potrebno ih je spremiti u mapu \texttt{fig/}:
+\begin{itemize}
+  \item \texttt{architecture.png} -- arhitektura sustava.
+  \item \texttt{eda\_hist\_a.png} -- histogrami skupa A.
+  \item \texttt{eda\_corr\_a.png} -- korelacije skupa A.
+  \item \texttt{roc\_xgb.png} -- ROC krivulja.
+  \item \texttt{pr\_xgb.png} -- PR krivulja.
+  \item \texttt{calibration\_uncalibrated.png} -- kalibracija prije.
+  \item \texttt{calibration\_isotonic.png} -- kalibracija poslije.
+  \item \texttt{shap\_summary.png} -- SHAP summary.
+  \item \texttt{shap\_waterfall.png} -- SHAP waterfall.
+  \item \texttt{silhouette.png} -- silhouette graf.
+  \item \texttt{kmeans\_pca.png} -- PCA vizualizacija klastera.
+  \item \texttt{api\_demo.png} -- prikaz rada API-ja (screenshot).
+\end{itemize}
+
+
+\end{document}
