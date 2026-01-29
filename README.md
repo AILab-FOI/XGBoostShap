@@ -13,17 +13,17 @@ ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimi
 - [x] **napredna eda i statistika:**
     - [x] vizualizacija distribucija (histogrami, boxplotovi).
     - [x] statistički testovi normalnosti (shapiro-wilk / kolmogorov-smirnov).
-    - [ ] analiza korelacija (pearson za linearne, spearman za nelinearne odnose).
-    - [ ] detekcija multikolinearnosti (vif - variance inflation factor).
+    - [x] analiza korelacija (pearson za linearne, spearman za nelinearne odnose).
+    - [x] detekcija multikolinearnosti (vif - variance inflation factor).
 
 ### faza 2: feature engineering i predobrada (tjedan 4-6)
-- [ ] **pipeline za čišćenje:**
-    - [ ] napredna imputacija (mice - multivariate imputation) umjesto običnog prosjeka.
-    - [ ] tretman outliera (iqr metoda ili isolation forest).
-- [ ] **konstrukcija značajki (domain knowledge):**
-    - [ ] kreiranje financijskih omjera (npr. debt-to-income, utilization rate).
-    - [ ] binning kontinuiranih varijabli (weight of evidence - woe transformacija).
-    - [ ] interakcijske značajke (polinomske kombinacije ključnih varijabli).
+- [x] **pipeline za čišćenje:**
+    - [x] napredna imputacija (mice - multivariate imputation) umjesto običnog prosjeka.
+    - [x] tretman outliera (iqr metoda ili isolation forest).
+- [x] **konstrukcija značajki (domain knowledge):**
+    - [x] kreiranje financijskih omjera (npr. debt-to-income, utilization rate).
+    - [x] binning kontinuiranih varijabli (weight of evidence - woe transformacija).
+    - [x] interakcijske značajke (polinomske kombinacije ključnih varijabli).
 - [ ] **selekcija značajki:**
     - [ ] filtriranje pomoću `boruta` algoritma ili recursive feature elimination (rfe).
     - [ ] dokumentiranje zadržanih vs. odbačenih varijabli.
