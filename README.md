@@ -24,8 +24,8 @@ ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimi
     - [x] kreiranje financijskih omjera (npr. debt-to-income, utilization rate).
     - [x] binning kontinuiranih varijabli (weight of evidence - woe transformacija).
     - [x] interakcijske značajke (polinomske kombinacije ključnih varijabli).
-- [ ] **selekcija značajki:**
-    - [ ] filtriranje pomoću `boruta` algoritma ili recursive feature elimination (rfe).
+- [x] **selekcija značajki:**
+    - [x] filtriranje pomoću `boruta` algoritma ili recursive feature elimination (rfe).
     - [ ] dokumentiranje zadržanih vs. odbačenih varijabli.
 
 ### faza 3: modeliranje i rigorozna validacija (tjedan 7-10)
