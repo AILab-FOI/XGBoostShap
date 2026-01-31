@@ -26,7 +26,7 @@ ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimi
     - [x] interakcijske značajke (polinomske kombinacije ključnih varijabli).
 - [x] **selekcija značajki:**
     - [x] filtriranje pomoću `boruta` algoritma ili recursive feature elimination (rfe).
-    - [ ] dokumentiranje zadržanih vs. odbačenih varijabli.
+    - [x] dokumentiranje zadržanih vs. odbačenih varijabli.
 
 ### faza 3: modeliranje i rigorozna validacija (tjedan 7-10)
 - [ ] **baseline modeli:**
