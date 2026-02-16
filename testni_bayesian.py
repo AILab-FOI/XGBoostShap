@@ -26,3 +26,17 @@ iso_forest = IsolationForest(
 )
 
 df_imputed["is_anomaly"] = (iso_forest.fit_predict(df_imputed.select_dtypes(include=np.number)) == -1).astype(int)
+
+
+
+d = [2,10]
+lambdas = [0,100]
+
+fig,axes = plt.subplots(2,2,figsize = (10,8))
+for i,degree in enumerate(d):
+    for j,lam in enumerate(lambdas):
+
+        poly = PolynomialFeatures(degree)
+        X_poly = poly.fit_transform(X)
+
+
