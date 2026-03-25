@@ -29,39 +29,39 @@ ovaj repozitorij prati 15-tjedni istraživački projekt s ciljem razvoja, optimi
     - [x] dokumentiranje zadržanih vs. odbačenih varijabli.
 
 ### faza 3: modeliranje i rigorozna validacija (tjedan 7-10)
-- [ ] **baseline modeli:**
-    - [ ] logistička regresija (za usporedbu linearnosti).
-    - [ ] random forest (kao jednostavniji ensemble benchmark).
-- [ ] **razvoj xgboost modela:**
-    - [ ] implementacija custom loss funkcije (ako je potrebno zbog cijene pogreške).
-    - [ ] postavljanje `scale_pos_weight` za rješavanje nebalansiranih klasa.
-- [ ] **napredna optimizacija (bayesian):**
-    - [ ] implementacija `optuna` studije za hiperparametre.
-    - [ ] vizualizacija hiperparametarskog prostora (slice plots).
-- [ ] **znanstvena validacija (gold standard):**
-    - [ ] implementacija **nested cross-validation** (5x2 ili 10x5) za realnu procjenu greške.
-    - [ ] analiza krivulja učenja (learning curves) za dijagnozu bias/variance trade-offa.
-    - [ ] threshold tuning: optimizacija praga odluke za maksimizaciju f1-scorea ili profita.
+- [x] **baseline modeli:**
+    - [x] logistička regresija (za usporedbu linearnosti).
+    - [x] random forest (kao jednostavniji ensemble benchmark).
+- [x] **razvoj xgboost modela:**
+    - [x] implementacija custom loss funkcije (ako je potrebno zbog cijene pogreške).
+    - [x] postavljanje `scale_pos_weight` za rješavanje nebalansiranih klasa.
+- [x] **napredna optimizacija (bayesian):**
+    - [x] implementacija `optuna` studije za hiperparametre.
+    - [x] vizualizacija hiperparametarskog prostora (slice plots).
+- [x] **znanstvena validacija (gold standard):**
+    - [x] implementacija **nested cross-validation** (5x2 ili 10x5) za realnu procjenu greške.
+    - [x] analiza krivulja učenja (learning curves) za dijagnozu bias/variance trade-offa.
+    - [x] threshold tuning: optimizacija praga odluke za maksimizaciju f1-scorea ili profita.
 
 ### faza 4: explainable ai (xai) i fairness (tjedan 11-13)
-- [ ] **shap analiza (model agnostic):**
-    - [ ] beeswarm plotovi za globalni feature importance.
-    - [ ] dependence plotovi za analizu nelinearnosti.
-    - [ ] interakcijske matrice.
-- [ ] **usporedba metoda:**
-    - [ ] usporedba shap rezultata s permutation importance metodom.
-- [ ] **fairness i bias analiza:**
-    - [ ] provjera pristranosti modela prema osjetljivim grupama (npr. dob, spol - ako postoje u podacima).
-    - [ ] izračun metrika: disparate impact ratio, equal opportunity difference.
+- [x] **shap analiza (model agnostic):**
+    - [x] beeswarm plotovi za globalni feature importance.
+    - [x] dependence plotovi za analizu nelinearnosti.
+    - [x] interakcijske matrice.
+- [x] **usporedba metoda:**
+    - [x] usporedba shap rezultata s permutation importance metodom.
+- [x] **fairness i bias analiza:**
+    - [x] provjera pristranosti modela prema osjetljivim grupama (npr. dob, spol - ako postoje u podacima).
+    - [x] izračun metrika: disparate impact ratio, equal opportunity difference.
 
 ### faza 5: inženjering, reproducibilnost i izvještaj (tjedan 14-15)
-- [ ] **kvaliteta koda:**
-    - [ ] type hinting (mypy) i formatiranje (black/flake8).
-    - [ ] pisanje unit testova (`pytest`) za ključne funkcije pipelinea.
-- [ ] **reproducibilnost:**
-    - [ ] kreiranje `dockerfile` za izolaciju okruženja.
-    - [ ] postavljanje `reproducibility_guide.md`.
+- [x] **kvaliteta koda:**
+    - [x] type hinting (mypy) i formatiranje (black/flake8).
+    - [x] pisanje unit testova (`pytest`) za ključne funkcije pipelinea.
+- [x] **reproducibilnost:**
+    - [x] kreiranje `dockerfile` za izolaciju okruženja.
+    - [x] postavljanje `reproducibility_guide.md`.
 - [ ] **finalni deliverables:**
     - [ ] pisanje znanstvenog izvještaja u latex formatu (struktura: abstract, method, results, discussion).
-    - [ ] generiranje finalnih vizualizacija visoke rezolucije.
+    - [x] generiranje finalnih vizualizacija visoke rezolucije.
     - [ ] snimanje kratkog demo videa ili gif-a za readme.
